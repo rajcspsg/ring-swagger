@@ -1,5 +1,5 @@
 (ns ring.swagger.swagger2-full-schema
-  "Full swaggger spec Schema"
+  "Full swagger spec Schema"
   (:require [schema.core :as s])
   (:import (java.net MalformedURLException)))
 

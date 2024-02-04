@@ -11,7 +11,6 @@
 ;;
 ;; Schema transformations
 ;;
-
 (defn extract-models [swagger]
   (let [route-meta (->> swagger
                         :paths
