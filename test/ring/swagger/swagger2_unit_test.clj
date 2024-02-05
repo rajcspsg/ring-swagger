@@ -101,7 +101,7 @@
   (fact "No schemas are collected if all are unnamed"
     (rsc/collect-models String) => {})
 
-  (fact "Inline-sub-schemas as collected after they are nameed"
+  (fact "Inline-sub-schemas as collected after they are named"
     (rsc/collect-models (rsc/with-named-sub-schemas RootModel))
     => {'RootModel #{RootModel}
         'RootModelSub #{(:sub RootModel)}})
@@ -218,7 +218,7 @@
          :type "integer"
          :format "int32"}])
 
-  (fact "schemas wtih postconditions are supported in ..."
+  (fact "schemas with post conditions are supported in ..."
     (s/defschema Polygon {:sides s/Int})
     (s/defschema Triangle (s/constrained Polygon #(= (:sides %) 3)))
 

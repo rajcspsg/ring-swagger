@@ -39,7 +39,7 @@
   (fact "Uses name of optional-key"
     (meta (get (rsc/name-schemas ['Root] {(s/optional-key :sub) {:a s/Str}}) (s/optional-key :sub)))
     => {:name 'RootSub})
-  (fact "generated names for non-spesific keys"
+  (fact "generated names for non-specific keys"
     (str (:name (meta (get (rsc/name-schemas ["Root"] {s/Keyword {:a s/Str}}) s/Keyword))))
     => #"^RootKeyword\d+")
 

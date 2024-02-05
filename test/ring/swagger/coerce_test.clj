@@ -2,8 +2,7 @@
   (:require [midje.sweet :refer :all]
             [schema.core :as s]
             [ring.swagger.coerce :as rsc]
-            [ring.swagger.extension :as extension]
-            [schema.coerce :as sc])
+            [ring.swagger.extension :as extension])
   (:import [org.joda.time LocalDate DateTime LocalTime]
            [java.util Date UUID]))
 

@@ -69,7 +69,7 @@
           (http-get handler "/ui-docs/index.html") => html?
           (http-get handler "/ui-docs/conf.js") => javascript?))
 
-      ;; Some possible envinronments
+      ;; Some possible environments
       (facts "Under a compojure context"
 
         (fact "with context"
@@ -87,7 +87,7 @@
       (facts "Servlet context"
         ;; Servlet context:
         ;; - uri will contain full path
-        ;; - servlet context countains ServletContext object
+        ;; - servlet context contains ServletContext object
         ;; - context contains context path (under compojure this will also contain compojure context)
         (let [fake-context (test-utils/fake-servlet-context "/servlet")]
           (http-get (swagger-ui)

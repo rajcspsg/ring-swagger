@@ -1,0 +1,172 @@
+{:schemes [],
+ :tags
+ [{:name "pet",
+   :description "Everything about your Pets",
+   :externalDocs
+   {:description "Find out more", :url "http://swagger.io"}}
+  {:name "store", :description "Access to Petstore orders"}
+  {:name "user",
+   :description "Operations about user",
+   :externalDocs
+   {:description "Find out more about our store",
+    :url "http://swagger.io"}}],
+ :securityDefinitions {},
+ :security [],
+ :produces ["application/json" "application/edn"],
+ :externalDocs {:url "http://someurl.com", :description "more info"},
+ :paths
+ {"/api/:id"
+  {:get
+   {:description "description",
+    :tags ["pet"],
+    :produces ["application/xyz"],
+    :externalDocs
+    {:url "http://someurl.com", :description "more info"},
+    :consumes ["application/xyz"],
+    :summary "summary",
+    :responses
+    {200 {:description "ok", :schema nil},
+     400 {:description "not found", :schema {:message java.lang.String}},
+     :default {:description "error", :schema {:code java.lang.Long}}},
+    :parameters
+    {:body nil,
+     :query {Keyword Any, :x java.lang.Long, :y java.lang.Long},
+     :path {:id java.lang.String},
+     :header {Keyword Any},
+     :formData {Keyword Any}},
+    :operationId "operationId"}},
+  "/api/parrots"
+  {:get
+   {:responses
+    {200
+     {:schema {:name java.lang.String, :type {:name java.lang.String}},
+      :description ""}}}},
+  "/api/all-types"
+  {:get
+   {:parameters
+    {:body
+     {:a java.lang.Boolean,
+      :b java.lang.Double,
+      :c java.lang.Long,
+      :d java.lang.String,
+      :e
+      {:v java.util.regex.Pattern,
+       :o [{:p #{{:q java.lang.String}}}],
+       :w #"a[6-9]",
+       :m (both java.lang.Long (pred odd?)),
+       :l (maybe Str),
+       :k org.joda.time.LocalDate,
+       :g #{java.lang.String},
+       :j org.joda.time.DateTime,
+       :h #{(enum :kukka :kikka :kakka)},
+       :f [Keyword],
+       :k2 org.joda.time.LocalTime,
+       :i java.util.Date,
+       :u java.util.UUID}}},
+    :responses {200 {:description "file", :schema java.io.File}}}},
+  "/api/pets"
+  {:get
+   {:parameters
+    {:body
+     {:id java.lang.Long,
+      :name java.lang.String,
+      :leg {:length java.lang.Long},
+      {:k :weight} java.lang.Double},
+     :query {Keyword Any, :x java.lang.Long, :y java.lang.Long},
+     :path {},
+     :header {Keyword Any},
+     :formData {Keyword Any}},
+    :responses
+    {200 {:description "ok", :schema {:sum java.lang.Long}},
+     :default {:description "error", :schema {:code java.lang.Long}}}},
+   :post
+   {:parameters
+    {:body
+     #{{:id java.lang.Long,
+        :name java.lang.String,
+        :leg {:length java.lang.Long},
+        {:k :weight} java.lang.Double}},
+     :query {Keyword Any, :x java.lang.Long, :y java.lang.Long}},
+    :responses
+    {200 {:schema {:sum java.lang.Long}},
+     :default
+     {:schema {:code java.lang.Long},
+      :headers {:location java.lang.String}}}},
+   :put
+   {:parameters
+    {:body
+     [(maybe
+        {:id java.lang.Long,
+         :name Str,
+         :leg {:length java.lang.Long},
+         (optional-key :weight) java.lang.Double})],
+     :query {:x (maybe Str)}},
+    :responses
+    {200 {:description "ok", :schema {:sum (maybe java.lang.Long)}},
+     :default {:description "error"}}}},
+  "/api/turtle"
+  {:get
+   {:parameters
+    {:body
+     {:name java.lang.String,
+      :tags
+      (conditional
+        map?--5134
+        {Keyword Keyword}
+        clojure.core$constantly/fn--5394
+        [Str])},
+     :query {Keyword Any, :x java.lang.Long, :y java.lang.Long},
+     :path {},
+     :header {Keyword Any},
+     :formData {Keyword Any}},
+    :responses
+    {200 {:description "ok", :schema {:sum java.lang.Long}},
+     :default {:description "error", :schema {:code java.lang.Long}}}},
+   :post
+   {:parameters
+    {:body
+     #{{:name java.lang.String,
+        :tags
+        (conditional
+          map?--5134
+          {Keyword Keyword}
+          clojure.core$constantly/fn--5394
+          [Str])}},
+     :query {Keyword Any, :x java.lang.Long, :y java.lang.Long}},
+    :responses
+    {200 {:schema {:sum java.lang.Long}},
+     :default
+     {:schema {:code java.lang.Long},
+      :headers {:location java.lang.String}}}},
+   :put
+   {:parameters
+    {:body
+     [(maybe
+        {:name Str,
+         :tags
+         (conditional
+           map?--5134
+           {Keyword Keyword}
+           clojure.core$constantly/fn--5394
+           [Str])})],
+     :query {:x (maybe Str)}},
+    :responses
+    {200 {:description "ok", :schema {:sum (maybe java.lang.Long)}},
+     :default {:description "error"}}}}},
+ :consumes ["application/json" "application/edn"],
+ :host "somehost:8080",
+ :responses {},
+ :info
+ {:version "version",
+  :title "title",
+  :description "description",
+  :termsOfService "jeah",
+  :contact
+  {:name "name",
+   :url "http://someurl.com",
+   :email "tommi@example.com"},
+  :license {:name "name", :url "http://someurl.com"},
+  :x-kikka "jeah"},
+ :swagger "2.0",
+ :parameters {},
+ :basePath "/"}

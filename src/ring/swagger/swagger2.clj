@@ -27,11 +27,17 @@
     (concat body-models response-models)))
 
 (defn transform-models [schemas options]
-  (->> schemas
-       rsc/collect-models
-       (rsc/handle-duplicate-schemas (:handle-duplicate-schemas-fn options))
-       (map (juxt (comp str key) (comp rsjs/schema-object val)))
-       (into (sorted-map))))
+  (println "transform-models")
+  (clojure.pprint/pprint schemas)
+  (println "transform-models output")
+  (let [result (->> schemas
+                    rsc/collect-models
+                    (rsc/handle-duplicate-schemas (:handle-duplicate-schemas-fn options))
+                    (map (juxt (comp str key) (comp rsjs/schema-object val)))
+                    (into (sorted-map)))]
+    (clojure.pprint/pprint result)
+    (println "end transform models")
+    result))
 
 ;;
 ;; Paths, parameters, responses
@@ -74,6 +80,7 @@
 
 (defn convert-parameters [parameters options]
   (into [] (mapcat (fn [[in model]]
+                     (println "in" in "\n" "model" model "\n")
                      (extract-parameter in model (assoc options :in in)))
                    parameters)))
 
