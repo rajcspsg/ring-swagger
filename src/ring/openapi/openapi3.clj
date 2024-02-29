@@ -1,4 +1,4 @@
-(ns ring.swagger.swagger2
+(ns ring.openapi.openapi3
   (:require [clojure.string :as str]
             [schema.core :as s]
             [schema-tools.core :as stc]
@@ -6,7 +6,7 @@
             [ring.swagger.common :as common]
             [ring.swagger.json-schema :as rsjs]
             [ring.swagger.core :as rsc]
-            [ring.swagger.swagger2-schema :as swagger2-schema]))
+            [ring.openapi.openapi3-schema :as openapi3-schema]))
 
 ;;
 ;; Schema transformations
@@ -44,11 +44,11 @@
     (let [schema (rsc/peek-schema model)
           schema-json (rsjs/->swagger model options)]
       (vector
-        {:in "body"
-         :name (or (common/title schema) "")
-         :description (or (:description (rsjs/json-schema-meta schema)) "")
-         :required (not (rsjs/maybe? model))
-         :schema schema-json}))))
+       {:in "body"
+        :name (or (common/title schema) "")
+        :description (or (:description (rsjs/json-schema-meta schema)) "")
+        :required (not (rsjs/maybe? model))
+        :schema schema-json}))))
 
 (defmethod extract-parameter :default [in model options]
   (if model
@@ -58,11 +58,11 @@
                 json-schema (rsjs/->swagger v options)]
           :when json-schema]
       (merge
-        {:in (name in)
-         :name (rsjs/key-name rk)
-         :description ""
-         :required (or (= in :path) (s/required-key? k))}
-        json-schema))))
+       {:in (name in)
+        :name (rsjs/key-name rk)
+        :description ""
+        :required (or (= in :path) (s/required-key? k))}
+       json-schema))))
 
 (defn- default-response-description
   "uses option :default-response-description-fn to generate
@@ -78,17 +78,12 @@
           schema-json (rsjs/->swagger model options)]
       {
        :name        (or (common/title schema) "")
-       :description (or (:description (rsjs/json-schema-meta schema)) "")
-       :required    (not (rsjs/maybe? model))
-       :schema      schema-json})))
+       :content     {"application/json" {:schema schema-json}}})))
 
 (defn convert-parameters [parameters options]
   (into [] (mapcat (fn [[in model]]
                      (extract-parameter in model (assoc options :in in)))
                    parameters)))
-
-(defn update-schema-obj [schema]
-  {:content {"application/json" {:schema (rsjs/->swagger schema)}}})
 
 (defn update-response-schema [{:keys [schema] :as response}]
   (let [content {"application/json" {:schema (rsjs/->swagger schema)}}
@@ -143,12 +138,12 @@
 (defn extract-paths-and-definitions [swagger options]
   (let [original-paths (or (:paths swagger) {})
         paths (reduce-kv
-                (fn [acc k v]
-                  (assoc acc
-                    (swagger-path k)
-                    (convert-operation v options)))
-                (empty original-paths)
-                original-paths)
+               (fn [acc k v]
+                 (assoc acc
+                   (swagger-path k)
+                   (convert-operation v options)))
+               (empty original-paths)
+               original-paths)
         definitions (-> swagger
                         extract-models
                         (transform-models options))]
@@ -206,17 +201,15 @@
 ;; Schema
 ;;
 
-(def swagger-defaults {:swagger "2.0"
-                       :info {:title "Swagger API"
-                              :version "0.0.1"}
-                       :produces ["application/json"]
-                       :consumes ["application/json"]})
+(def openapi-defaults {:openapi  "3.0.3"
+                       :info     {:title   "Swagger API"
+                                  :version "0.0.1"}})
 
 ;;
 ;; Swagger Spec
 ;;
 
-(def Swagger swagger2-schema/Swagger)
+(def OpenApi openapi3-schema/OpenApi)
 
 (def Options {(s/optional-key :ignore-missing-mappings?) s/Bool
               (s/optional-key :default-response-description-fn) (s/=> s/Str s/Int)
@@ -227,8 +220,8 @@
                        :default-response-description-fn (constantly "")
                        :handle-duplicate-schemas-fn rsc/ignore-duplicate-schemas}))
 
-(s/defn swagger-json
-  "Produces swagger-json output from ring-swagger spec.
+(s/defn openapi-json
+  "Produces openapi-json output from ring-openapi spec.
    Optional second argument is a options map, supporting
    the following options with defaults:
 
@@ -242,7 +235,7 @@
                                       response descriptions from http status code.
                                       Takes a status code (Int) and returns a String.
 
-   :handle-duplicate-schemas-fn     - (ring.swagger.core/ignore-duplicate-schemas),
+   :handle-duplicate-schemas-fn     - (ring.openapi.core/ignore-duplicate-schemas),
                                       a function to handle possible duplicate schema
                                       definitions. Takes schema-name and set of found
                                       attached schema values as parameters. Returns
@@ -251,15 +244,15 @@
    :collection-format               - Sets the collectionFormat for query and formData
                                       parameters.
                                       Possible values: multi, ssv, csv, tsv, pipes."
-  ([swagger :- (s/maybe Swagger)] (swagger-json swagger nil))
-  ([swagger :- (s/maybe Swagger), options :- (s/maybe Options)]
-    (let [options (merge option-defaults options)]
-      (binding [rsjs/*ignore-missing-mappings* (true? (:ignore-missing-mappings? options))]
-        (let [[paths definitions] (-> swagger
-                                      ensure-body-and-response-schema-names
-                                      (extract-paths-and-definitions options))]
-          (common/deep-merge
-            swagger-defaults
-            (-> swagger
-                (assoc :paths paths)
-                (assoc :definitions definitions))))))))
+  ([openapi :- (s/maybe OpenApi)] (openapi-json openapi nil))
+  ([openapi :- (s/maybe OpenApi), options :- (s/maybe Options)]
+   (let [options (merge option-defaults options)]
+     (binding [rsjs/*ignore-missing-mappings* (true? (:ignore-missing-mappings? options))]
+       (let [[paths definitions] (-> openapi
+                                     ensure-body-and-response-schema-names
+                                     (extract-paths-and-definitions options))]
+         (common/deep-merge
+          openapi-defaults
+          (-> openapi
+              (assoc :paths paths)
+              (assoc :definitions definitions))))))))
