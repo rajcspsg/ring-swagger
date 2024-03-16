@@ -19,7 +19,7 @@
                         (map vals)
                         flatten)
         body-models (->> route-meta
-                         (map (comp :body)))
+                         (map (comp :body :parameters)))
         response-models (->> route-meta
                              (map :responses)
                              (mapcat vals)
@@ -37,18 +37,18 @@
 ;; Paths, parameters, responses
 ;;
 
-(defmulti ^:private extract-parameter (fn [in _ _] in))
+(defmulti extract-parameter (fn [in _ _] in))
 
 (defmethod extract-parameter :body [_ model options]
   (if model
     (let [schema (rsc/peek-schema model)
           schema-json (rsjs/->swagger model options)]
       (vector
-        {:in "body"
-         :name (or (common/title schema) "")
-         :description (or (:description (rsjs/json-schema-meta schema)) "")
-         :required (not (rsjs/maybe? model))
-         :schema schema-json}))))
+       {:in "body"
+        :name (or (common/title schema) "")
+        :description (or (:description (rsjs/json-schema-meta schema)) "")
+        :required (not (rsjs/maybe? model))
+        :schema schema-json}))))
 
 (defmethod extract-parameter :default [in model options]
   (if model
@@ -58,11 +58,11 @@
                 json-schema (rsjs/->swagger v options)]
           :when json-schema]
       (merge
-        {:in (name in)
-         :name (rsjs/key-name rk)
-         :description ""
-         :required (or (= in :path) (s/required-key? k))}
-        json-schema))))
+       {:in (name in)
+        :name (rsjs/key-name rk)
+        :description ""
+        :required (or (= in :path) (s/required-key? k))}
+       json-schema))))
 
 (defn- default-response-description
   "uses option :default-response-description-fn to generate
@@ -72,38 +72,16 @@
     (generator status)
     ""))
 
-(defn convert-body [model options]
-  (if model
-    (let [schema (rsc/peek-schema model)
-          schema-json (rsjs/->swagger model options)]
-      {
-       :name        (or (common/title schema) "")
-       :description (or (:description (rsjs/json-schema-meta schema)) "")
-       :required    (not (rsjs/maybe? model))
-       :schema      schema-json})))
-
 (defn convert-parameters [parameters options]
   (into [] (mapcat (fn [[in model]]
                      (extract-parameter in model (assoc options :in in)))
                    parameters)))
 
-(defn update-schema-obj [schema]
-  {:content {"application/json" {:schema (rsjs/->swagger schema)}}})
-
-(defn update-response-schema [{:keys [schema] :as response}]
-  (let [content {"application/json" {:schema (rsjs/->swagger schema)}}
-        result
-                (-> response
-                    (assoc :content content)
-                    (dissoc :schema))]
-    (clojure.pprint/pprint result)
-    result))
-
 (defn convert-responses [responses options]
   (let [responses (p/for-map [[k v] responses
                               :let [{:keys [schema headers]} v]]
                     k (-> v
-                          (cond-> schema update-response-schema)
+                          (cond-> schema (update-in [:schema] rsjs/->swagger options))
                           (cond-> headers (update-in [:headers] (fn [headers]
                                                                   (if headers
                                                                     (->> (for [[k v] headers]
@@ -124,7 +102,7 @@
   [operation options]
   (p/for-map [[k v] operation]
     k (-> v
-          (common/update-in-or-remove-key [:body] #(convert-body % options) empty?)
+          (common/update-in-or-remove-key [:parameters] #(convert-parameters % options) empty?)
           (update-in [:responses] convert-responses options))))
 
 (defn swagger-path
@@ -143,20 +121,20 @@
 (defn extract-paths-and-definitions [swagger options]
   (let [original-paths (or (:paths swagger) {})
         paths (reduce-kv
-                (fn [acc k v]
-                  (assoc acc
-                    (swagger-path k)
-                    (convert-operation v options)))
-                (empty original-paths)
-                original-paths)
+               (fn [acc k v]
+                 (assoc acc
+                   (swagger-path k)
+                   (convert-operation v options)))
+               (empty original-paths)
+               original-paths)
         definitions (-> swagger
                         extract-models
                         (transform-models options))]
     [paths definitions]))
 
 (defn ensure-body-sub-schemas [route]
-  (if (get-in route [:body])
-    (update-in route [:body] #(rsc/with-named-sub-schemas % "Body"))
+  (if (get-in route [:parameters :body])
+    (update-in route [:parameters :body] #(rsc/with-named-sub-schemas % "Body"))
     route))
 
 (defn ensure-response-sub-schemas [route]
@@ -253,13 +231,13 @@
                                       Possible values: multi, ssv, csv, tsv, pipes."
   ([swagger :- (s/maybe Swagger)] (swagger-json swagger nil))
   ([swagger :- (s/maybe Swagger), options :- (s/maybe Options)]
-    (let [options (merge option-defaults options)]
-      (binding [rsjs/*ignore-missing-mappings* (true? (:ignore-missing-mappings? options))]
-        (let [[paths definitions] (-> swagger
-                                      ensure-body-and-response-schema-names
-                                      (extract-paths-and-definitions options))]
-          (common/deep-merge
-            swagger-defaults
-            (-> swagger
-                (assoc :paths paths)
-                (assoc :definitions definitions))))))))
+   (let [options (merge option-defaults options)]
+     (binding [rsjs/*ignore-missing-mappings* (true? (:ignore-missing-mappings? options))]
+       (let [[paths definitions] (-> swagger
+                                     ensure-body-and-response-schema-names
+                                     (extract-paths-and-definitions options))]
+         (common/deep-merge
+          swagger-defaults
+          (-> swagger
+              (assoc :paths paths)
+              (assoc :definitions definitions))))))))

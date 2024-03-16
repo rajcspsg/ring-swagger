@@ -19,12 +19,12 @@
                         (map vals)
                         flatten)
         body-models (->> route-meta
-                         (map (comp :body)))
+                         (map (comp :requestBody)))
         response-models (->> route-meta
                              (map :responses)
                              (mapcat vals)
                              (keep :schema))]
-    (concat body-models response-models)))
+    [body-models response-models]))
 
 (defn transform-models [schemas options]
   (->> schemas
@@ -72,18 +72,19 @@
     (generator status)
     ""))
 
-(defn convert-body [model options]
-  (if model
-    (let [schema (rsc/peek-schema model)
-          schema-json (rsjs/->swagger model options)]
-      {
-       :name        (or (common/title schema) "")
-       :content     {"application/json" {:schema schema-json}}})))
+(defn convert-body [contents options]
+  (if contents
+    (into {} (for [[content-type schema-input] contents]
+               [content-type
+                (let [schema      (rsc/peek-schema schema-input)
+                      schema-json (rsjs/->swagger schema-input options)]
+                  {:name   (or (common/title schema) "")
+                   :schema schema-json})]))
 
-(defn convert-parameters [parameters options]
-  (into [] (mapcat (fn [[in model]]
-                     (extract-parameter in model (assoc options :in in)))
-                   parameters)))
+    (defn convert-parameters [parameters options]
+      (into [] (mapcat (fn [[in model]]
+                         (extract-parameter in model (assoc options :in in)))
+                       parameters)))))
 
 (defn update-response-schema [{:keys [schema] :as response}]
   (let [content {"application/json" {:schema (rsjs/->swagger schema)}}
@@ -91,7 +92,6 @@
                 (-> response
                     (assoc :content content)
                     (dissoc :schema))]
-    (clojure.pprint/pprint result)
     result))
 
 (defn convert-responses [responses options]
@@ -119,7 +119,7 @@
   [operation options]
   (p/for-map [[k v] operation]
     k (-> v
-          (common/update-in-or-remove-key [:body] #(convert-body % options) empty?)
+          (common/update-in-or-remove-key [:requestBody :content] #(convert-body % options) empty?)
           (update-in [:responses] convert-responses options))))
 
 (defn swagger-path
@@ -136,23 +136,30 @@
   (str/replace uri #":([\p{L}_][\p{L}_0-9-]*)" "{$1}"))
 
 (defn extract-paths-and-definitions [swagger options]
-  (let [original-paths (or (:paths swagger) {})
-        paths (reduce-kv
-               (fn [acc k v]
-                 (assoc acc
-                   (swagger-path k)
-                   (convert-operation v options)))
-               (empty original-paths)
-               original-paths)
-        definitions (-> swagger
-                        extract-models
-                        (transform-models options))]
-    [paths definitions]))
+  (let [original-paths       (or (:paths swagger) {})
+        paths                (reduce-kv
+                              (fn [acc k v]
+                                (assoc acc
+                                  (swagger-path k)
+                                  (convert-operation v options)))
+                              (empty original-paths)
+                              original-paths)
+        [body-models response-models] (extract-models swagger)
+        body-definitions     (transform-models body-models options)
+        response-definitions (transform-models response-models options)]
+    (println "body-definitions: \n")
+    (clojure.pprint/pprint body-definitions)
+    (println "response definitions: \n")
+    (clojure.pprint/pprint response-definitions)
+    [paths body-definitions response-definitions]))
+
+(defn process-contents [content]
+  (into {} (for [[content-type schema] content]
+             [content-type (rsc/with-named-sub-schemas schema "Body")])))
 
 (defn ensure-body-sub-schemas [route]
-  (if (get-in route [:body])
-    (update-in route [:body] #(rsc/with-named-sub-schemas % "Body"))
-    route))
+  (update-in route [:requestBody :content]
+             process-contents))
 
 (defn ensure-response-sub-schemas [route]
   (if-let [responses (get-in route [:responses])]
@@ -248,11 +255,14 @@
   ([openapi :- (s/maybe OpenApi), options :- (s/maybe Options)]
    (let [options (merge option-defaults options)]
      (binding [rsjs/*ignore-missing-mappings* (true? (:ignore-missing-mappings? options))]
-       (let [[paths definitions] (-> openapi
-                                     ensure-body-and-response-schema-names
-                                     (extract-paths-and-definitions options))]
+       (let [[paths body-definitions response-definitions] (-> openapi
+                                                                 ensure-body-and-response-schema-names
+                                                                 (extract-paths-and-definitions options))
+             definitions                                         {:requestBodies body-definitions :responses response-definitions}]
+         (println "\n definitions \n")
+         (clojure.pprint/pprint definitions)
          (common/deep-merge
           openapi-defaults
           (-> openapi
               (assoc :paths paths)
-              (assoc :definitions definitions))))))))
+              (assoc :components definitions))))))))

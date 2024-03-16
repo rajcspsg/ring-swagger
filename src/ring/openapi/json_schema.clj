@@ -1,4 +1,4 @@
-(ns ring.swagger.json-schema
+(ns ring.openapi.json-schema
   (:require [schema.core :as s]
             [schema.spec.core :as spec]
             [schema.spec.variant :as variant]
@@ -77,9 +77,9 @@
 (defn reference? [m]
   (contains? m :$ref))
 
-(defn reference [e]
+(defn reference [e component]
   (if-let [schema-name (s/schema-name e)]
-    {:$ref (str "#/components/" schema-name)}
+    {:$ref (str "#/components/"  (or component "schemas") "/" schema-name)}
     (if (not *ignore-missing-mappings*)
       (not-supported! e))))
 
@@ -241,14 +241,14 @@
     (assoc (coll-schema e options) :uniqueItems true))
 
   clojure.lang.IPersistentMap
-  (convert [e {:keys [properties?]}]
+  (convert [e {:keys [properties? component]}]
     (if properties?
       {:properties (properties e)}
-      (reference e)))
+      (reference e component)))
 
   clojure.lang.Var
-  (convert [e _]
-    (reference e)))
+  (convert [e {:keys [component]}]
+    (reference e component)))
 
 ;;
 ;; Schema to Swagger Schema definitions
