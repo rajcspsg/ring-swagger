@@ -4,7 +4,7 @@
             [schema-tools.core :as stc]
             [plumbing.core :as p]
             [ring.swagger.common :as common]
-            [ring.swagger.json-schema :as rsjs]
+            [ring.openapi.json-schema :as rsjs]
             [ring.swagger.core :as rsc]
             [ring.openapi.openapi3-schema :as openapi3-schema]))
 
@@ -77,7 +77,7 @@
     (into {} (for [[content-type schema-input] contents]
                [content-type
                 (let [schema      (rsc/peek-schema schema-input)
-                      schema-json (rsjs/->swagger schema-input options)]
+                      schema-json (rsjs/->swagger schema-input options "requestBodies")]
                   {:name   (or (common/title schema) "")
                    :schema schema-json})]))
 
@@ -87,7 +87,7 @@
                        parameters)))))
 
 (defn update-response-schema [{:keys [schema] :as response}]
-  (let [content {"application/json" {:schema (rsjs/->swagger schema)}}
+  (let [content {"application/json" {:schema (rsjs/->swagger schema {} "responses")}}
         result
                 (-> response
                     (assoc :content content)
@@ -95,6 +95,7 @@
     result))
 
 (defn convert-responses [responses options]
+  (println "started converting responses")
   (let [responses (p/for-map [[k v] responses
                               :let [{:keys [schema headers]} v]]
                     k (-> v
@@ -104,10 +105,11 @@
                                                                     (->> (for [[k v] headers]
                                                                            [k (rsjs/->swagger v options)])
                                                                          (into {}))))))
-                          (update-in [:description] #(or %
+                          #_(update-in [:description] #(or %
                                                          (:description (rsjs/json-schema-meta v))
                                                          (default-response-description k options)))
                           common/remove-empty-keys))]
+    (println "finished converting responses")
     (if-not (empty? responses)
       responses
       {:default {:description ""}})))
@@ -162,11 +164,13 @@
              process-contents))
 
 (defn ensure-response-sub-schemas [route]
+  (println "ensure-response-sub-schemas")
   (if-let [responses (get-in route [:responses])]
     (let [schema-codes (reduce (fn [acc [k {:keys [schema]}]]
                                  (if schema (conj acc k) acc))
                                [] responses)
-          transformed (reduce (fn [acc code]
+          _            (println "converted schema-codes")
+          transformed  (reduce (fn [acc code]
                                 (update-in acc [:responses code :schema] #(rsc/with-named-sub-schemas % "Response")))
                               route schema-codes)]
       transformed)
@@ -200,6 +204,7 @@
    with a generated names for all anonymous nested schemas
    that come as body parameters or response models."
   [swagger]
+  (println "starting ensure-body-and-response-schema-names")
   (->> swagger
        (transform-operations ensure-body-sub-schemas)
        (transform-operations ensure-response-sub-schemas)))

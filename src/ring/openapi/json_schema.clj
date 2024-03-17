@@ -59,12 +59,13 @@
 (defmulti convert-class (fn [c options] c))
 
 (defprotocol JsonSchema
-  (convert [this options]))
+  (convert [this options component-type]))
 
 (defn not-supported! [e]
+  (clojure.pprint/pprint e)
   (throw (IllegalArgumentException.
-           (str "don't know how to convert " e " into a Swagger Schema. "
-                "Check out ring-swagger docs for details."))))
+          (str "don't know how to convert " e " into a Swagger Schema. "
+               "Check out ring-swagger docs for details."))))
 
 (defn assoc-collection-format
   "Add collectionFormat to the JSON Schema if the parameter type
@@ -81,7 +82,7 @@
   (if-let [schema-name (s/schema-name e)]
     {:$ref (str "#/components/"  (or component "schemas") "/" schema-name)}
     (if (not *ignore-missing-mappings*)
-      (not-supported! e))))
+      (println "schema-name : " (s/schema-name e)))))
 
 (defn merge-meta
   [m x {:keys [::no-meta :key-meta]}]
@@ -129,8 +130,10 @@
   ([x]
    (->swagger x {}))
   ([x options]
+   (->swagger x options nil))
+  ([x options component-type]
    (-> x
-       (convert options)
+       (convert options component-type)
        (merge-meta x options))))
 
 (defn- try->swagger [v k key-meta]
@@ -150,33 +153,33 @@
 (extend-protocol JsonSchema
 
   Object
-  (convert [e _]
+  (convert [e _ _]
     (not-supported! e))
 
   Class
-  (convert [e options]
+  (convert [e options _]
     (if-let [schema (common/record-schema e)]
       (schema-object schema)
       (convert-class e options)))
 
   nil
-  (convert [_ _]
+  (convert [_ _ _]
     nil)
 
   FieldSchema
-  (convert [e _]
-    (->swagger (:schema e)))
+  (convert [e _ component-type]
+    (->swagger (:schema e) component-type))
 
   schema.core.Predicate
-  (convert [e _]
+  (convert [e _ _]
     (some-> e :pred-name predicate-name-to-class ->swagger))
 
   schema.core.EnumSchema
-  (convert [e _]
+  (convert [e _ _]
     (merge (->swagger (class (first (:vs e)))) {:enum (seq (:vs e))}))
 
   schema.core.Maybe
-  (convert [e {:keys [in]}]
+  (convert [e {:keys [in]} _]
     (let [schema (->swagger (:schema e))]
       (condp contains? in
         #{:query :formData} (assoc schema :allowEmptyValue true)
@@ -184,71 +187,73 @@
         schema)))
 
   schema.core.Both
-  (convert [e _]
+  (convert [e _ _]
     (->swagger (first (:schemas e))))
 
   schema.core.Either
-  (convert [e _]
+  (convert [e _ _]
     (->swagger (first (:schemas e))))
 
   schema.core.Recursive
-  (convert [e _]
+  (convert [e _ _]
     (->swagger (:derefable e)))
 
   schema.core.EqSchema
-  (convert [e _]
+  (convert [e _ _]
     (merge (->swagger (class (:v e)))
            {:enum [(:v e)]}))
 
   schema.core.NamedSchema
-  (convert [e _]
+  (convert [e _ _]
     (->swagger (:schema e)))
 
   schema.core.One
-  (convert [e _]
+  (convert [e _ _]
     (->swagger (:schema e)))
 
   schema.core.AnythingSchema
-  (convert [_ {:keys [in] :as opts}]
+  (convert [_ {:keys [in] :as opts} _]
     (if (and in (not= :body in))
       (->swagger (s/maybe s/Str) opts)
       {}))
 
   schema.core.ConditionalSchema
-  (convert [e _]
+  (convert [e _ _]
     {:x-oneOf (vec (keep (comp ->swagger second) (:preds-and-schemas e)))})
 
   schema.core.CondPre
-  (convert [e _]
+  (convert [e _ _]
     {:x-oneOf (mapv ->swagger (:schemas e))})
 
   schema.core.Constrained
-  (convert [e _]
+  (convert [e _ _]
     (->swagger (:schema e)))
 
   java.util.regex.Pattern
-  (convert [e _]
+  (convert [e _ _]
     {:type "string" :pattern (str e)})
-
-  ;; Collections
+;; Collections
 
   clojure.lang.Sequential
-  (convert [e options]
+  (convert [e options _]
     (coll-schema e options))
 
   clojure.lang.IPersistentSet
-  (convert [e options]
+  (convert [e options _]
     (assoc (coll-schema e options) :uniqueItems true))
 
   clojure.lang.IPersistentMap
-  (convert [e {:keys [properties? component]}]
+  (convert [e {:keys [properties?]} component-type]
+    (println "properties? " properties?)
+    (println " component-type " component-type)
+    (clojure.pprint/pprint e)
     (if properties?
       {:properties (properties e)}
-      (reference e component)))
+      (reference e component-type)))
 
   clojure.lang.Var
-  (convert [e {:keys [component]}]
-    (reference e component)))
+  (convert [e _ component-type]
+    (reference e component-type)))
 
 ;;
 ;; Schema to Swagger Schema definitions
