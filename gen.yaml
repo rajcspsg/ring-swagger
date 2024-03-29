@@ -1,0 +1,90 @@
+openapi: 3.0.3
+info:
+  title: Swagger API
+  version: 0.0.1
+paths:
+  /api:
+    post:
+      parameters:
+        - in: query
+          name: x
+          description: ""
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          name: y
+          description: ""
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: header
+          name: Content-Type
+          description: ""
+          required: true
+          schema:
+            type: string
+            enum:
+              - application/json
+              - application/xml
+              - application/edn
+        - in: header
+          name: Accept
+          description: ""
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Body15899"
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+        "400":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FatalError"
+components:
+  schemas:
+    Body15899:
+      type: object
+      properties:
+        foo:
+          type: string
+      additionalProperties: false
+      required:
+        - foo
+    FatalError:
+      type: object
+      properties:
+        id:
+          type: string
+        description:
+          type: string
+        code:
+          type: string
+      additionalProperties: false
+      required:
+        - id
+        - description
+        - code
+    Tag:
+      type: object
+      properties:
+        id:
+          description: Unique identifier for the tag
+          type: integer
+          format: int64
+        name:
+          description: Friendly name for the tag
+      additionalProperties: false

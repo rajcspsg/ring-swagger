@@ -77,18 +77,22 @@
 (defn reference? [m]
   (contains? m :$ref))
 
-(defn reference [e component]
+(defn reference [e]
   (if-let [schema-name (s/schema-name e)]
-    {:$ref (str "#/components/"  (or component "schemas") "/" schema-name)}
-    (if (not *ignore-missing-mappings*)
-      (not-supported! e))))
+    {:$ref (str "#/components/schemas/"  schema-name)}))
 
 (defn merge-meta
   [m x {:keys [::no-meta :key-meta]}]
+  (println "no-meta: " no-meta "\t key-meta: " key-meta "\t reference? : " (reference? m))
+  (clojure.pprint/pprint m)
+  (clojure.pprint/pprint x)
   (if (and (not no-meta) (not (reference? m)))
+    (do
+    (println "inside json schema meta")
+    (println "end merge-meta")
     (merge (json-schema-meta x)
            (if key-meta (common/remove-empty-keys (select-keys key-meta [:default])))
-           m)
+           m))
     m))
 
 ;; Classes
@@ -241,14 +245,14 @@
     (assoc (coll-schema e options) :uniqueItems true))
 
   clojure.lang.IPersistentMap
-  (convert [e {:keys [properties? component]}]
+  (convert [e {:keys [properties?]}]
     (if properties?
       {:properties (properties e)}
-      (reference e component)))
+      (reference e)))
 
   clojure.lang.Var
-  (convert [e {:keys [component]}]
-    (reference e component)))
+  (convert [e]
+    (reference e)))
 
 ;;
 ;; Schema to Swagger Schema definitions

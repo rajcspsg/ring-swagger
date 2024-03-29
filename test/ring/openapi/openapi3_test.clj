@@ -18,5 +18,5 @@
    (s/optional-key :name) (rsjs/field s/Str {:description "Friendly name for the tag"})})
 (def swagger-response {:paths {"/api" {:post { :requestBody {:content {"application/json" {:foo s/Str}}} :responses {200 {:description "ok" :schema Tag}}}}}})
 
-(deftest swagger-response-test
+#_(deftest swagger-response-test
   (clojure.pprint/pprint (openapi-json swagger-response)))

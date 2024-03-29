@@ -4,7 +4,7 @@
             [schema-tools.core :as stc]
             [plumbing.core :as p]
             [ring.swagger.common :as common]
-            [ring.swagger.json-schema :as rsjs]
+            [ring.openapi.json-schema :as rsjs]
             [ring.swagger.core :as rsc]
             [ring.openapi.openapi3-schema :as openapi3-schema]))
 
@@ -79,12 +79,12 @@
                 (let [schema      (rsc/peek-schema schema-input)
                       schema-json (rsjs/->swagger schema-input options)]
                   {:name   (or (common/title schema) "")
-                   :schema schema-json})]))
+                   :schema schema-json})]))))
 
-    (defn convert-parameters [parameters options]
-      (into [] (mapcat (fn [[in model]]
-                         (extract-parameter in model (assoc options :in in)))
-                       parameters)))))
+(defn convert-parameters [parameters options]
+  (into [] (mapcat (fn [[in model]]
+                     (extract-parameter in model (assoc options :in in)))
+                   parameters)))
 
 (defn update-response-schema [{:keys [schema] :as response}]
   (let [content {"application/json" {:schema (rsjs/->swagger schema)}}
@@ -119,6 +119,7 @@
   [operation options]
   (p/for-map [[k v] operation]
     k (-> v
+          (common/update-in-or-remove-key [:parameters] #(convert-parameters % options) empty?)
           (common/update-in-or-remove-key [:requestBody :content] #(convert-body % options) empty?)
           (update-in [:responses] convert-responses options))))
 
@@ -144,14 +145,10 @@
                                   (convert-operation v options)))
                               (empty original-paths)
                               original-paths)
-        [body-models response-models] (extract-models swagger)
-        body-definitions     (transform-models body-models options)
-        response-definitions (transform-models response-models options)]
-    (println "body-definitions: \n")
-    (clojure.pprint/pprint body-definitions)
-    (println "response definitions: \n")
-    (clojure.pprint/pprint response-definitions)
-    [paths body-definitions response-definitions]))
+        definitions (-> swagger
+                        extract-models
+                        (transform-models options))]
+    [paths definitions]))
 
 (defn process-contents [content]
   (into {} (for [[content-type schema] content]
@@ -171,6 +168,64 @@
                               route schema-codes)]
       transformed)
     route))
+
+(defn endpoint-processor [endpoint]
+  (println "endpoint processor:")
+  (def endpoint endpoint)
+  (clojure.pprint/pprint endpoint)
+
+  endpoint)
+
+(defn get-response-ref [v]
+  (some-> (-> v
+              :content
+              vals
+              first
+              :schema
+              :$ref)
+          (str/replace "/schemas/" "/responses/")))
+
+(defn to-responses-defn [responses]
+  (into {} (for [[method status-ref-map] responses] [method  (into {} (for [[status [references]] status-ref-map] [status {:$ref references}]))])))
+
+(defn endpoint-processor2 [endpoint]
+  (let [backup          (reduce-kv (fn [acc method definition]
+                            (let [body-acc      (if (:requestBody definition)
+                                                  (let [body-name (-> (get-in definition [:requestBody :content])
+                                                                      vals
+                                                                      first
+                                                                      :name)]
+                                                    (-> acc
+                                                        (update-in [:requestBodySchemas] conj {(keyword body-name) (:requestBody definition)})
+                                                        (update-in [:requestBodyDefinitions method] conj (str "#/components/requestBodies/" body-name)))) acc)
+                                  responses-acc (reduce-kv (fn [acc-res k v]
+                                                             (let [response-path (get-response-ref v)
+                                                                   response-name (last (.split response-path "/"))
+                                                                   response-path-val (keyword response-name)]
+                                                               (-> acc-res
+                                                                   (update-in [:responses method k] conj response-path)
+                                                                   (update-in [:responses-schema] conj {response-path-val v})))) body-acc (:responses definition))]
+                              responses-acc))
+                          {} endpoint)
+        responses-map       (to-responses-defn (:responses backup))
+        response-refs-updated     (reduce-kv (fn [acc http-method v]
+                                     (assoc-in acc [http-method :responses] v)) endpoint responses-map)
+        req-body-refs-updated (reduce-kv (fn [acc http-method [schema-reference]]
+                                          (assoc-in acc [http-method :requestBody] {:$ref schema-reference})) response-refs-updated (:requestBodyDefinitions backup))]
+    {:requestBodySchemas (:requestBodySchemas backup) :responses-schema (:responses-schema backup) :endpoint req-body-refs-updated}))
+
+(defn move-schemas [swagger]
+  (let [paths (or (:paths swagger) {})
+        map-req-resp-schemas (for [[k v] paths] [k (endpoint-processor2 v)])
+        updated-paths (into {} (for [[k v] map-req-resp-schemas] [k (:endpoint v)]))
+        all-schemas (for [[_ v] map-req-resp-schemas] [(dissoc v :endpoint)])
+        request-bodies (into {} (flatten (map (fn [x] (map :requestBodySchemas x)) (vec all-schemas))))
+        responses-schema (into {} (flatten (map (fn [x] (map :responses-schema x)) (vec all-schemas))))
+        swagger-new       (-> swagger
+                              (assoc :paths updated-paths)
+                              (assoc-in  [:components :responses] responses-schema)
+                              (assoc-in [:components :requestBodies] request-bodies))]
+    swagger-new))
 
 ;;
 ;; Public API
@@ -255,14 +310,11 @@
   ([openapi :- (s/maybe OpenApi), options :- (s/maybe Options)]
    (let [options (merge option-defaults options)]
      (binding [rsjs/*ignore-missing-mappings* (true? (:ignore-missing-mappings? options))]
-       (let [[paths body-definitions response-definitions] (-> openapi
-                                                                 ensure-body-and-response-schema-names
-                                                                 (extract-paths-and-definitions options))
-             definitions                                         {:requestBodies body-definitions :responses response-definitions}]
-         (println "\n definitions \n")
-         (clojure.pprint/pprint definitions)
+       (let [[paths definitions] (-> openapi
+                                     ensure-body-and-response-schema-names
+                                     (extract-paths-and-definitions options))]
          (common/deep-merge
           openapi-defaults
           (-> openapi
               (assoc :paths paths)
-              (assoc :components definitions))))))))
+              (assoc-in [:components :schemas] definitions))))))))

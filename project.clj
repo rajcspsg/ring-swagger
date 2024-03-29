@@ -20,7 +20,7 @@
                              [lein-ring "0.12.5"]
                              [lein-midje "3.2.1"]
                              [funcool/codeina "0.5.0"]]
-                   :dependencies [[org.clojure/clojure "1.8.0"]
+                   :dependencies [[org.clojure/clojure "1.9.0"]
                                   [midje "1.9.6" :exclusions [org.clojure/clojure
                                                               commons-codec]]
                                   [ring-mock "0.1.5"]
