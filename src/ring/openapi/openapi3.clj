@@ -4,7 +4,7 @@
             [schema-tools.core :as stc]
             [plumbing.core :as p]
             [ring.swagger.common :as common]
-            [ring.openapi.json-schema :as rsjs]
+            [ring.swagger.json-schema :as rsjs]
             [ring.swagger.core :as rsc]
             [ring.openapi.openapi3-schema :as openapi3-schema]))
 
@@ -42,7 +42,7 @@
 (defmethod extract-parameter :body [_ model options]
   (if model
     (let [schema (rsc/peek-schema model)
-          schema-json (rsjs/->swagger model options)]
+          schema-json (rsjs/->swagger model options :openapi)]
       (vector
        {:in "body"
         :name (or (common/title schema) "")
@@ -55,7 +55,7 @@
     (for [[k v] (-> model common/value-of stc/schema-value rsc/strict-schema)
           :when (s/specific-key? k)
           :let [rk (s/explicit-schema-key k)
-                json-schema (rsjs/->swagger v options)]
+                json-schema (rsjs/->swagger v options :openapi)]
           :when json-schema]
       {:in          (name in)
        :name        (rsjs/key-name rk)
@@ -76,7 +76,7 @@
     (into {} (for [[content-type schema-input] contents]
                [content-type
                 (let [schema      (rsc/peek-schema schema-input)
-                      schema-json (rsjs/->swagger schema-input options)]
+                      schema-json (rsjs/->swagger schema-input options :openapi)]
                   {:name   (or (common/title schema) "")
                    :schema schema-json})]))))
 
@@ -86,7 +86,7 @@
                    parameters)))
 
 (defn update-response-schema [{:keys [schema] :as response} options]
-  (let [content {"application/json" {:schema (rsjs/->swagger schema options)}}
+  (let [content {"application/json" {:schema (rsjs/->swagger schema options :openapi)}}
         result
                 (-> response
                     (assoc :content content)

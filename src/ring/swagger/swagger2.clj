@@ -42,7 +42,7 @@
 (defmethod extract-parameter :body [_ model options]
   (if model
     (let [schema (rsc/peek-schema model)
-          schema-json (rsjs/->swagger model options)]
+          schema-json (rsjs/->swagger model options :swagger)]
       (vector
        {:in "body"
         :name (or (common/title schema) "")
@@ -55,7 +55,7 @@
     (for [[k v] (-> model common/value-of stc/schema-value rsc/strict-schema)
           :when (s/specific-key? k)
           :let [rk (s/explicit-schema-key k)
-                json-schema (rsjs/->swagger v options)]
+                json-schema (rsjs/->swagger v options :swagger)]
           :when json-schema]
       (merge
        {:in (name in)
@@ -81,11 +81,11 @@
   (let [responses (p/for-map [[k v] responses
                               :let [{:keys [schema headers]} v]]
                     k (-> v
-                          (cond-> schema (update-in [:schema] rsjs/->swagger options))
+                          (cond-> schema (update-in [:schema] rsjs/->swagger options :swagger))
                           (cond-> headers (update-in [:headers] (fn [headers]
                                                                   (if headers
                                                                     (->> (for [[k v] headers]
-                                                                           [k (rsjs/->swagger v options)])
+                                                                           [k (rsjs/->swagger v options :swagger)])
                                                                          (into {}))))))
                           (update-in [:description] #(or %
                                                          (:description (rsjs/json-schema-meta v))
