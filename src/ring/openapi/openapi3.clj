@@ -85,8 +85,8 @@
                      (extract-parameter in model (assoc options :in in)))
                    parameters)))
 
-(defn update-response-schema [{:keys [schema] :as response}]
-  (let [content {"application/json" {:schema (rsjs/->swagger schema)}}
+(defn update-response-schema [{:keys [schema] :as response} options]
+  (let [content {"application/json" {:schema (rsjs/->swagger schema options)}}
         result
                 (-> response
                     (assoc :content content)
@@ -97,7 +97,7 @@
   (let [responses (p/for-map [[k v] responses
                               :let [{:keys [schema headers]} v]]
                     k (-> v
-                          (cond-> schema update-response-schema)
+                          (cond-> schema (update-response-schema options))
                           (cond-> headers (update-in [:headers] (fn [headers]
                                                                   (if headers
                                                                     (->> (for [[k v] headers]
