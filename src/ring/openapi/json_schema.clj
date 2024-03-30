@@ -83,16 +83,10 @@
 
 (defn merge-meta
   [m x {:keys [::no-meta :key-meta]}]
-  (println "no-meta: " no-meta "\t key-meta: " key-meta "\t reference? : " (reference? m))
-  (clojure.pprint/pprint m)
-  (clojure.pprint/pprint x)
   (if (and (not no-meta) (not (reference? m)))
-    (do
-    (println "inside json schema meta")
-    (println "end merge-meta")
     (merge (json-schema-meta x)
            (if key-meta (common/remove-empty-keys (select-keys key-meta [:default])))
-           m))
+           m)
     m))
 
 ;; Classes

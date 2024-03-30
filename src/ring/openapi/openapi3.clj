@@ -57,12 +57,11 @@
           :let [rk (s/explicit-schema-key k)
                 json-schema (rsjs/->swagger v options)]
           :when json-schema]
-      (merge
-       {:in (name in)
-        :name (rsjs/key-name rk)
-        :description ""
-        :required (or (= in :path) (s/required-key? k))}
-       json-schema))))
+      {:in          (name in)
+       :name        (rsjs/key-name rk)
+       :description ""
+       :required    (or (= in :path) (s/required-key? k))
+       :schema      json-schema})))
 
 (defn- default-response-description
   "uses option :default-response-description-fn to generate
@@ -169,13 +168,6 @@
       transformed)
     route))
 
-(defn endpoint-processor [endpoint]
-  (println "endpoint processor:")
-  (def endpoint endpoint)
-  (clojure.pprint/pprint endpoint)
-
-  endpoint)
-
 (defn get-response-ref [v]
   (some-> (-> v
               :content
@@ -214,17 +206,35 @@
                                           (assoc-in acc [http-method :requestBody] {:$ref schema-reference})) response-refs-updated (:requestBodyDefinitions backup))]
     {:requestBodySchemas (:requestBodySchemas backup) :responses-schema (:responses-schema backup) :endpoint req-body-refs-updated}))
 
+(defn segregate-schema-examples [all-schemas]
+  (reduce-kv (fn [acc schema-name schema]
+               (let [example (:example schema)]
+                 (if (and example (map? example))
+                   (-> acc
+                       (update-in [:examples] merge {schema-name (:example schema)})
+                       (update-in [:schemas] merge {schema-name (dissoc schema :example)}))
+                   (update-in acc [:schemas] merge {schema-name schema}))
+                 )) (empty all-schemas) all-schemas))
+
+(defn remove-body-name [{:keys [content]}]
+  {:content (into {} (for [[k v] content] [k (dissoc v :name)]))})
+
 (defn move-schemas [swagger]
   (let [paths (or (:paths swagger) {})
+        {:keys [schemas examples]} (segregate-schema-examples (:schemas (:components swagger)))
         map-req-resp-schemas (for [[k v] paths] [k (endpoint-processor2 v)])
         updated-paths (into {} (for [[k v] map-req-resp-schemas] [k (:endpoint v)]))
         all-schemas (for [[_ v] map-req-resp-schemas] [(dissoc v :endpoint)])
-        request-bodies (into {} (flatten (map (fn [x] (map :requestBodySchemas x)) (vec all-schemas))))
+        request-bodies  (into {} (flatten (mapv (fn [x] (map :requestBodySchemas x)) (vec all-schemas))))
+        request-bodies  (into {} (for [[body-name schema] request-bodies] [body-name (remove-body-name schema)]))
         responses-schema (into {} (flatten (map (fn [x] (map :responses-schema x)) (vec all-schemas))))
         swagger-new       (-> swagger
                               (assoc :paths updated-paths)
                               (assoc-in  [:components :responses] responses-schema)
-                              (assoc-in [:components :requestBodies] request-bodies))]
+                              (assoc-in [:components :requestBodies] request-bodies)
+                              (assoc-in [:components :schemas] schemas)
+                              (assoc-in [:components :examples] examples))]
+    (clojure.pprint/pprint request-bodies)
     swagger-new))
 
 ;;
@@ -266,10 +276,33 @@
 (def openapi-defaults {:openapi  "3.0.3"
                        :info     {:title   "Swagger API"
                                   :version "0.0.1"}})
-
 ;;
 ;; Swagger Spec
 ;;
+
+(defn security-processor [endpoint]
+  (let [backup (reduce-kv (fn [acc method definition]
+                            (if (:security definition)
+                              (let [security         (:security definition)
+                                    security-schemas (into {} (for [[k v] security] [k (dissoc v :scopes)]))
+                                    security-path    (into {} (for [[k v] security] [k (:scopes v)]))
+                                    result           (-> acc
+                                                         (update-in [:security-paths method] conj security-path)
+                                                         (update-in [:security-schemes] conj security-schemas))]
+                                result) acc)) {} endpoint)
+        new-endpoint  (reduce-kv (fn [acc http-method & security]
+                                   (assoc-in acc [http-method :security] (vec (flatten security)))) endpoint (:security-paths backup))]
+    {:security-schemes (:security-schemes backup) :endpoint new-endpoint}))
+
+(defn security-operations [swagger]
+  (let [paths (or (:paths swagger) {})
+        map-req-resp-schemas (for [[k v] paths] [k (security-processor v)])
+        updated-paths (into {} (for [[k v] map-req-resp-schemas] [k (:endpoint v)]))
+        security-schemes (into {} (flatten (for [[_ v] map-req-resp-schemas] [(:security-schemes v)])))
+        swagger-new       (-> swagger
+                              (assoc :paths updated-paths)
+                              (assoc-in  [:components :securitySchemes] security-schemes))]
+    swagger-new))
 
 (def OpenApi openapi3-schema/OpenApi)
 
@@ -317,4 +350,5 @@
           openapi-defaults
           (-> openapi
               (assoc :paths paths)
-              (assoc-in [:components :schemas] definitions))))))))
+              (assoc-in [:components :schemas] definitions)
+              (security-operations))))))))
