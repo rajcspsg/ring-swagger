@@ -30,7 +30,7 @@
   (->> schemas
        rsc/collect-models
        (rsc/handle-duplicate-schemas (:handle-duplicate-schemas-fn options))
-       (map (juxt (comp str key) (comp rsjs/schema-object val)))
+       (map (juxt (comp str key) (comp #(rsjs/schema-object % :swagger) val)))
        (into (sorted-map))))
 
 ;;

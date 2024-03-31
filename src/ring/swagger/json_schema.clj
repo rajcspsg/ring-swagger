@@ -56,7 +56,7 @@
       (str (if n (str n "/")) (name x)))
     x))
 
-(defmulti convert-class (fn [c options schema-type] c))
+(defmulti convert-class (fn [c _ _] c))
 
 (defprotocol JsonSchema
   (convert [this options schema-type]))
@@ -114,7 +114,7 @@
  (defmethod convert-class java.time.LocalDate [_ _ _] {:type "string" :format "date"})
  (defmethod convert-class java.time.LocalTime [_ _ _] {:type "string" :format "time"}))
 
-(defmethod convert-class :default [e _]
+(defmethod convert-class :default [e _ _]
   (println "in convert-class default")
   (if-not *ignore-missing-mappings*
     (not-supported! e)))
@@ -135,9 +135,10 @@
        (convert options schema-type)
        (merge-meta x options))))
 
-(defn try->swagger [v k key-meta]
-  (try (->swagger v {:key-meta key-meta} :swagger)
+(defn try->swagger [v k key-meta schema-type]
+  (try (->swagger v {:key-meta key-meta} schema-type)
        (catch Exception e
+         (.printStackTrace e)
          (throw
           (IllegalArgumentException.
            (str "error converting to swagger schema [" k " "
@@ -158,7 +159,7 @@
   Class
   (convert [e options schema-type]
     (if-let [schema (common/record-schema e)]
-      (schema-object schema)
+      (schema-object schema schema-type)
       (convert-class e options schema-type)))
 
   nil
@@ -174,8 +175,8 @@
     (some-> e :pred-name predicate-name-to-class (->swagger {} schema-type)))
 
   schema.core.EnumSchema
-  (convert [e _ _]
-    (merge (->swagger (class (first (:vs e)))) {:enum (seq (:vs e))}))
+  (convert [e options schema-type]
+    (merge (->swagger (class (first (:vs e))) options schema-type) {:enum (seq (:vs e))}))
 
   schema.core.Maybe
   (convert [e {:keys [in]} _]
@@ -245,7 +246,7 @@
   clojure.lang.IPersistentMap
   (convert [e {:keys [properties?]} schema-type]
     (if properties?
-      {:properties (properties e)}
+      {:properties (properties e schema-type)}
       (reference e schema-type)))
 
   clojure.lang.Var
@@ -261,14 +262,14 @@
   The result is put into collection of same type as input schema.
   Thus linked/map should keep the order of items. Returnes nil
   if no properties are found."
-  [schema]
+  [schema schema-type]
   {:pre [(common/plain-map? schema)]}
   (let [props (into (empty schema)
                     (for [[k v] schema
                           :when (s/specific-key? k)
                           :let [key-meta (meta k)
                                 k (s/explicit-schema-key k)]
-                          :let [v (try->swagger v k key-meta)]]
+                          :let [v (try->swagger v k key-meta schema-type)]]
                       (and v [k v])))]
     (if (seq props)
       props)))
@@ -276,20 +277,20 @@
 (defn additional-properties
   "Generates json-schema additional properties from a plain map
   schema from under key s/Keyword."
-  [schema]
+  [schema schema-type]
   {:pre [(common/plain-map? schema)]}
   (if-let [extra-key (s/find-extra-keys-schema schema)]
     (let [v (get schema extra-key)]
-      (try->swagger v s/Keyword nil))
+      (try->swagger v s/Keyword nil schema-type ))
     false))
 
 (defn schema-object
   "Returns a JSON Schema object of a plain map schema."
-  [schema]
+  [schema schema-type]
   (if (common/plain-map? schema)
-    (let [properties (properties schema)
+    (let [properties (properties schema schema-type)
           title (if (not (s/schema-name schema)) (common/title schema))
-          additional-properties (additional-properties schema)
+          additional-properties (additional-properties schema schema-type)
           meta (json-schema-meta schema)
           required (some->> (rsc/required-keys schema)
                             (filter (partial contains? properties))
