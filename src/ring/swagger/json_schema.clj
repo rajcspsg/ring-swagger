@@ -62,7 +62,6 @@
   (convert [this options schema-type]))
 
 (defn not-supported! [e]
-  (clojure.pprint/pprint e)
   (throw (IllegalArgumentException.
           (str "don't know how to convert " e " into a Swagger Schema. "
                "Check out ring-swagger docs for details."))))
@@ -115,7 +114,6 @@
  (defmethod convert-class java.time.LocalTime [_ _ _] {:type "string" :format "time"}))
 
 (defmethod convert-class :default [e _ _]
-  (println "in convert-class default")
   (if-not *ignore-missing-mappings*
     (not-supported! e)))
 
@@ -138,7 +136,6 @@
 (defn try->swagger [v k key-meta schema-type]
   (try (->swagger v {:key-meta key-meta} schema-type)
        (catch Exception e
-         (.printStackTrace e)
          (throw
           (IllegalArgumentException.
            (str "error converting to swagger schema [" k " "
