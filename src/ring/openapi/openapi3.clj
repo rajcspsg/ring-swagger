@@ -23,14 +23,15 @@
         response-models (->> route-meta
                              (map :responses)
                              (mapcat vals)
-                             (keep :schema))]
+                             (map :content)
+                             (map vals))]
     [body-models response-models]))
 
 (defn transform-models [schemas options]
   (->> schemas
        rsc/collect-models
        (rsc/handle-duplicate-schemas (:handle-duplicate-schemas-fn options))
-       (map (juxt (comp str key) (comp rsjs/schema-object val)))
+       (map (juxt (comp str key) (comp #(rsjs/schema-object % :openapi) val)))
        (into (sorted-map))))
 
 ;;
@@ -85,19 +86,19 @@
                      (extract-parameter in model (assoc options :in in)))
                    parameters)))
 
-(defn update-response-schema [{:keys [schema] :as response} options]
-  (let [content {"application/json" {:schema (rsjs/->swagger schema options :openapi)}}
+(defn update-response-schema [{:keys [content] :as response} options]
+  (let [new-content (into {} (for [[content-type schema] content] [content-type {:schema (rsjs/->swagger (:schema schema) options :openapi)}]))
         result
                 (-> response
-                    (assoc :content content)
-                    (dissoc :schema))]
+                    (assoc :content new-content))]
     result))
 
 (defn convert-responses [responses options]
   (let [responses (p/for-map [[k v] responses
-                              :let [{:keys [schema headers]} v]]
+                              :let [{:keys [content headers]} v]]
                     k (-> v
-                          (cond-> schema (update-response-schema options))
+                          (cond-> content (-> v
+                                              (assoc :content(into {} (for [[content-type schema] content] [content-type {:schema (rsjs/->swagger (:schema schema) options :openapi)}])) )))
                           (cond-> headers (update-in [:headers] (fn [headers]
                                                                   (if headers
                                                                     (->> (for [[k v] headers]
@@ -149,13 +150,13 @@
                         (transform-models options))]
     [paths definitions]))
 
-(defn process-contents [content]
+(defn process-contents [content prefix]
   (into {} (for [[content-type schema] content]
-             [content-type (rsc/with-named-sub-schemas schema "Body")])))
+             [content-type (rsc/with-named-sub-schemas schema prefix)])))
 
 (defn ensure-body-sub-schemas [route]
   (update-in route [:requestBody :content]
-             process-contents))
+             #(process-contents % "Body")))
 
 (defn ensure-response-sub-schemas [route]
   (if-let [responses (get-in route [:responses])]
@@ -163,7 +164,7 @@
                                  (if schema (conj acc k) acc))
                                [] responses)
           transformed (reduce (fn [acc code]
-                                (update-in acc [:responses code :schema] #(rsc/with-named-sub-schemas % "Response")))
+                                (update-in acc [:responses code :content] #(process-contents % "Response")))
                               route schema-codes)]
       transformed)
     route))
