@@ -34,24 +34,7 @@
        (map (juxt (comp str key) (comp #(rsjs/schema-object % :openapi) val)))
        (into (sorted-map))))
 
-;;
-;; Paths, parameters, responses
-;;
-
-(defmulti ^:private extract-parameter (fn [in _ _] in))
-
-(defmethod extract-parameter :body [_ model options]
-  (if model
-    (let [schema (rsc/peek-schema model)
-          schema-json (rsjs/->swagger model options :openapi)]
-      (vector
-       {:in "body"
-        :name (or (common/title schema) "")
-        :description (or (:description (rsjs/json-schema-meta schema)) "")
-        :required (not (rsjs/maybe? model))
-        :schema schema-json}))))
-
-(defmethod extract-parameter :default [in model options]
+(defn extract-parameter [in model options]
   (if model
     (for [[k v] (-> model common/value-of stc/schema-value rsc/strict-schema)
           :when (s/specific-key? k)
@@ -202,16 +185,6 @@
         req-body-refs-updated (reduce-kv (fn [acc http-method [schema-reference]]
                                           (assoc-in acc [http-method :requestBody] {:$ref schema-reference})) response-refs-updated (:requestBodyDefinitions backup))]
     {:requestBodySchemas (:requestBodySchemas backup) :responses-schema (:responses-schema backup) :endpoint req-body-refs-updated}))
-
-(defn segregate-schema-examples [all-schemas]
-  (reduce-kv (fn [acc schema-name schema]
-               (let [example (:example schema)]
-                 (if (and example (map? example))
-                   (-> acc
-                       (update-in [:examples] merge {schema-name (:example schema)})
-                       (update-in [:schemas] merge {schema-name (dissoc schema :example)}))
-                   (update-in acc [:schemas] merge {schema-name schema}))
-                 )) (empty all-schemas) all-schemas))
 
 (defn remove-body-name [{:keys [content]}]
   {:content (into {} (for [[k v] content] [k (dissoc v :name)]))})
