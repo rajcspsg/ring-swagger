@@ -60,40 +60,21 @@
    (opt :encoding) {s/Str Encoding}
    })
 
-(s/defschema ParameterPath
-  {
-   :name s/Str
-   :in   s/Any
-   (opt :description) s/Str
-   :required s/Bool
-   (opt :deprecated) s/Bool
-   (opt :allowEmptyValue) s/Bool
-   (opt :style) s/Any
-   (opt :explode) s/Bool
-   (opt :allowReserved) s/Bool
-   (opt :schema) OpenApiSchemaPart
-   (opt :example) Example
-   (opt :examples) {s/Str Example}
-   (opt :content) {s/Str MediaObject}})
-
-(s/defschema ParameterOther
-  {
-   :name s/Str
-   :in s/Any
-   (opt :description) s/Str
-   :required s/Bool
-   (opt :deprecated) s/Bool
-   (opt :allowEmptyValue) s/Bool
-   (opt :style) s/Any
-   (opt :explode) s/Bool
-   (opt :allowReserved) s/Bool
-   (opt :schema) OpenApiSchemaPart
-   (opt :example) Example
-   (opt :examples) {s/Str Example}
-   (opt :content) {s/Str MediaObject}})
-
 (s/defschema Parameter
-  (s/enum [ParameterPath ParameterOther]))
+  {
+   :name s/Str
+   (opt :in) s/Any
+   (opt :description) s/Str
+   :required s/Bool
+   (opt :deprecated) s/Bool
+   (opt :allowEmptyValue) s/Bool
+   (opt :style) s/Any
+   (opt :explode) s/Bool
+   (opt :allowReserved) s/Bool
+   (opt :schema) OpenApiSchemaPart
+   (opt :example) Example
+   (opt :examples) {s/Str Example}
+   (opt :content) {s/Str MediaObject}})
 
 (s/defschema RequestBody
   {
@@ -129,7 +110,7 @@
    (opt :description) s/Str
    (opt :externalDocs) ExternalDocumentation
    (opt :operationId) s/Str
-   (opt :parameters) [Parameter]
+   (opt :parameters) s/Any  #_[Parameter]
    (opt :requestBody) RequestBody
    (opt :responses) {ResponseCode Response}
    (opt :deprecated) s/Bool
@@ -195,12 +176,12 @@
 
 (s/defschema OpenApi
   {
-   :openapi (s/conditional string? (s/pred #(re-matches #"^3\.\d\.\d$" %)))
-   :info    Info
-   (opt :servers) [Server]
-   :paths {s/Str Path}
-   (opt :components) Components
-   (opt :security) {s/Str [s/Str]}
-   (opt :tags) [Tag]
+   (opt :openapi)      (s/conditional string? (s/pred #(re-matches #"^3\.\d\.\d$" %)))
+   (opt :info)         Info
+   (opt :servers)      [Server]
+   (opt :paths)        {s/Str Path}
+   (opt :components)   Components
+   (opt :security)     {s/Str [s/Str]}
+   (opt :tags)         [Tag]
    (opt :externalDocs) ExternalDocumentation
    })

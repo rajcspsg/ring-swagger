@@ -55,7 +55,7 @@
     (generator status)
     ""))
 
-(defn convert-body [contents options]
+(defn convert-content-schema [contents options]
   (if contents
     (into {} (for [[content-type schema-input] contents]
                [content-type
@@ -63,6 +63,7 @@
                       schema-json (rsjs/->swagger schema-input options :openapi)]
                   {:name   (or (common/title schema) "")
                    :schema schema-json})]))))
+
 
 (defn convert-parameters [parameters options]
   (into [] (mapcat (fn [[in model]]
@@ -73,8 +74,7 @@
   (let [responses (p/for-map [[k v] responses
                               :let [{:keys [content headers]} v]]
                     k (-> v
-                          (cond-> content (-> v
-                                              (assoc :content (into {} (for [[content-type schema] content] [content-type {:schema (rsjs/->swagger (:schema schema) options :openapi)}])))))
+                          (cond-> content (assoc :content (convert-content-schema content options)))
                           (cond-> headers (update-in [:headers] (fn [headers]
                                                                   (if headers
                                                                     (->> (for [[k v] headers]
@@ -97,7 +97,7 @@
   (p/for-map [[k v] operation]
     k (-> v
           (common/update-in-or-remove-key [:parameters] #(convert-parameters % options) empty?)
-          (common/update-in-or-remove-key [:requestBody :content] #(convert-body % options) empty?)
+          (common/update-in-or-remove-key [:requestBody :content] #(convert-content-schema % options) empty?)
           (update-in [:responses] convert-responses options))))
 
 (defn swagger-path
@@ -137,8 +137,8 @@
 
 (defn ensure-response-sub-schemas [route]
   (if-let [responses (get-in route [:responses])]
-    (let [schema-codes (reduce (fn [acc [k {:keys [schema]}]]
-                                 (if schema (conj acc k) acc))
+    (let [schema-codes (reduce (fn [acc [k {:keys [content]}]]
+                                 (if content (conj acc k) acc))
                                [] responses)
           transformed (reduce (fn [acc code]
                                 (update-in acc [:responses code :content] #(process-contents % "Response")))
@@ -170,8 +170,6 @@
                                                         (update-in [:requestBodyDefinitions method] conj (str "#/components/requestBodies/" body-name)))) acc)
                                   responses-acc (reduce-kv (fn [acc-res k v]
                                                              (let [response-path (get-response-ref v)
-                                                                   _              (println "response-path is " response-path "\t v is " )
-                                                                   _              (clojure.pprint/pprint v)
                                                                    response-name (last (.split response-path "/"))
                                                                    response-path-val (keyword response-name)]
                                                                (-> acc-res
